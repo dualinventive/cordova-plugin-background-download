@@ -9,8 +9,14 @@ xmlns:android="http://schemas.android.com/apk/res/android"
     <description>Cordova Background Download Plugin</description>
     <license>Apache 2.0</license>
     <keywords>cordova,background,file,download</keywords>
-    <repo>TODO</repo>
-    <issue>TODO</issue>
+    <repo>https://github.com/dualinventive/cordova-plugin-background-download</repo>
+    <issue>https://github.com/dualinventive/cordova-plugin-background-download/issues</issue>
+
+    <dependency id="cordova-plugin-file" version=">=7.0.0" />
+
+    <engines>
+        <engine name="cordova-android" version=">=11.0.0" />
+    </engines>
 
     <js-module src="www/Promise.js" name="Promise">
     </js-module>
@@ -34,6 +40,7 @@ xmlns:android="http://schemas.android.com/apk/res/android"
         <config-file target="AndroidManifest.xml" parent="/*">
             <uses-permission android:name="android.permission.INTERNET" />
             <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+            <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
         </config-file>
 
         <source-file src="src/android/BackgroundDownload.java" target-dir="src/org/apache/cordova/backgroundDownload" />

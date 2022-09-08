@@ -26,12 +26,13 @@ import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.nio.channels.FileChannel;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Timer;
@@ -52,15 +53,10 @@ import android.app.DownloadManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
-import android.database.CursorIndexOutOfBoundsException;
 import android.net.Uri;
+import android.os.storage.StorageManager;
 import android.util.Log;
 import android.util.SparseArray;
-
-import android.os.Build;
-import android.os.Environment;
-import android.util.Log;
-import android.util.Log;
 
 /**
  * Based on DownloadManager which is intended to be used for long-running HTTP downloads. Support of Android 2.3. (API 9) and later
@@ -92,16 +88,16 @@ public class BackgroundDownload extends CordovaPlugin {
 
         private Uri targetFileUri;
         private Uri tempFileUri;
-        private String notificationTitle;
-        private List<Map<String, String>> headers;
-        private String uriMatcher;
-        private String uriString;
-        private CallbackContext callbackContext; // The callback context from which we were invoked.
+        private final String notificationTitle;
+        private final List<Map<String, String>> headers;
+        private final String uriMatcher;
+        private final String uriString;
+        private final CallbackContext callbackContext; // The callback context from which we were invoked.
         private long downloadId = DOWNLOAD_ID_UNDEFINED;
         private Timer timerProgressUpdate = null;
         private boolean isCanceled;
 
-        public static Download create(JSONArray args, CallbackContext callbackContext) throws JSONException  {
+        public static Download create(JSONArray args, CallbackContext callbackContext) throws JSONException {
             String uriMatcher = null;
             if (args.length() > 2 && !"null".equals(args.getString(2))) {
                 uriMatcher = args.getString(2);
@@ -112,13 +108,13 @@ public class BackgroundDownload extends CordovaPlugin {
                 notificationTitle = args.getString(3);
             }
 
-            List<Map<String, String>> headers = new ArrayList<Map<String, String>>();
+            List<Map<String, String>> headers = new ArrayList<>();
             if (args.length() > 4 && !"null".equals(args.getString(4))) {
                 JSONArray headersArray = args.getJSONArray(4);
-                for(int i=0; i<headersArray.length(); i++){
+                for (int i = 0; i < headersArray.length(); i++) {
                     String key = headersArray.getJSONObject(i).getString("Key");
                     String value = headersArray.getJSONObject(i).getString("Value");
-                    Map<String, String> header = new HashMap<String, String>();
+                    Map<String, String> header = new HashMap<>();
                     header.put("Key", key);
                     header.put("Value", value);
                     headers.add(header);
@@ -130,7 +126,7 @@ public class BackgroundDownload extends CordovaPlugin {
         }
 
         public Download(String uriString, String targetFileUri, String notificationTitle,
-                String uriMatcher, List<Map<String, String>> headers, CallbackContext callbackContext) {
+                        String uriMatcher, List<Map<String, String>> headers, CallbackContext callbackContext) {
             this.uriString = uriString;
             this.setTargetFileUri(targetFileUri);
             this.notificationTitle = notificationTitle;
@@ -189,7 +185,7 @@ public class BackgroundDownload extends CordovaPlugin {
 
         public void setTimerProgressUpdate(Timer TimerProgressUpdate) {
             this.timerProgressUpdate = TimerProgressUpdate;
-        };
+        }
 
         public void cancel() {
             this.isCanceled = true;
@@ -214,7 +210,7 @@ public class BackgroundDownload extends CordovaPlugin {
 
     private SparseArray<PermissionsRequest> permissionRequests;
 
-    private HashMap<String, Download> activeDownloads = new HashMap<String, Download>();
+    private final HashMap<String, Download> activeDownloads = new HashMap<>();
 
     private DownloadManager getDownloadManager() {
         return (DownloadManager) cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
@@ -224,23 +220,20 @@ public class BackgroundDownload extends CordovaPlugin {
     public void initialize(CordovaInterface cordova, CordovaWebView webView) {
         super.initialize(cordova, webView);
 
-        permissionRequests = new SparseArray<PermissionsRequest>();
+        permissionRequests = new SparseArray<>();
     }
 
     @Override
     public boolean execute(String action, final JSONArray args, final CallbackContext callbackContext) throws JSONException {
         try {
             if (action.equals("startAsync")) {
-                startAsync(args, callbackContext);
-                // cordova.getThreadPool().execute(new Runnable() {
-                //     public void run() {
-                //         try {
-                //             startAsync(args, callbackContext);
-                //         } catch (JSONException e) {
-                //             e.printStackTrace();
-                //         }
-                //     }
-                // });
+                cordova.getThreadPool().execute(() -> {
+                    try {
+                        startAsync(args, callbackContext);
+                    } catch (JSONException ex) {
+                        callbackContext.error(ex.getMessage());
+                    }
+                });
 
                 return true;
             }
@@ -263,7 +256,7 @@ public class BackgroundDownload extends CordovaPlugin {
         Download curDownload = Download.create(args, callbackContext);
         // set temp file uri
         curDownload.setTempFileUri(Uri.fromFile(new File(cordova.getContext().getExternalFilesDir("Downloads").getPath(),
-            curDownload.targetFileUri.getLastPathSegment() + "." + System.currentTimeMillis())).toString());
+                curDownload.targetFileUri.getLastPathSegment() + "." + System.currentTimeMillis())).toString());
 
         if (activeDownloads.containsKey(curDownload.getUriString())) {
             return;
@@ -292,11 +285,7 @@ public class BackgroundDownload extends CordovaPlugin {
                 request.addRequestHeader("Cookie", this.webView.getCookieManager().getCookie(curDownload.getUriString()));
 
                 // hide notification. Not compatible with current android api.
-                // request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN);
-
-                // we use default settings for roaming and network type
-                // request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
-                // request.setAllowedOverRoaming(false);
+                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN);
 
                 request.setDestinationUri(curDownload.getTempFileUri());
 
@@ -325,16 +314,15 @@ public class BackgroundDownload extends CordovaPlugin {
             public void run() {
                 DownloadManager.Query q = new DownloadManager.Query();
                 q.setFilterById(curDownload.getDownloadId());
-                Cursor cursor = mgr.query(q);
-                try {
+                try (Cursor cursor = mgr.query(q)) {
                     if (!cursor.moveToFirst()) {
                         cleanUp(curDownload, true);
                         curDownload.reportError(ERROR_CANCELED);
                         return;
                     }
 
-                    final int status = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS));
-                    final int reason = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_REASON));
+                    final int status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+                    final int reason = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON));
 
                     PluginResult progressUpdate;
                     JSONObject obj;
@@ -347,8 +335,8 @@ public class BackgroundDownload extends CordovaPlugin {
                             handleSuccessDownload(curDownload);
                             return;
                         case DownloadManager.STATUS_RUNNING:
-                            long bytesDownloaded = cursor.getLong(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
-                            long bytesTotal = cursor.getLong(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+                            long bytesDownloaded = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+                            long bytesTotal = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
                             JSONObject jsonProgress = new JSONObject();
                             jsonProgress.put("bytesReceived", bytesDownloaded);
                             jsonProgress.put("totalBytesToReceive", bytesTotal);
@@ -375,10 +363,8 @@ public class BackgroundDownload extends CordovaPlugin {
                     progressUpdate = new PluginResult(PluginResult.Status.OK, obj);
                     progressUpdate.setKeepCallback(true);
                     curDownload.getCallbackContext().sendPluginResult(progressUpdate);
-                } catch (JSONException e){
+                } catch (JSONException e) {
                     e.printStackTrace();
-                } finally {
-                    cursor.close();
                 }
             }
         }, DOWNLOAD_PROGRESS_UPDATE_TIMEOUT, DOWNLOAD_PROGRESS_UPDATE_TIMEOUT);
@@ -403,6 +389,7 @@ public class BackgroundDownload extends CordovaPlugin {
         }
     }
 
+    @SuppressWarnings("UnusedReturnValue")
     private static boolean deleteFileIfExists(Uri fileUri) {
         File targetFile = new File(fileUri.getPath());
         return targetFile.exists() && targetFile.delete();
@@ -476,7 +463,7 @@ public class BackgroundDownload extends CordovaPlugin {
 
     private boolean attachToExistingDownload(Download downloadItem) {
         DownloadManager.Query query = new DownloadManager.Query();
-        query.setFilterByStatus(DownloadManager.STATUS_PAUSED | DownloadManager.STATUS_PENDING | DownloadManager.STATUS_RUNNING  | DownloadManager.STATUS_SUCCESSFUL);
+        query.setFilterByStatus(DownloadManager.STATUS_PAUSED | DownloadManager.STATUS_PENDING | DownloadManager.STATUS_RUNNING | DownloadManager.STATUS_SUCCESSFUL);
 
         Cursor cur = getDownloadManager().query(query);
 
@@ -485,7 +472,7 @@ public class BackgroundDownload extends CordovaPlugin {
         int idxLocalUri = cur.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
 
         final Pattern pattern = downloadItem.getUriMatcher() != null && !"".equals(downloadItem.getUriMatcher())
-            ? Pattern.compile(downloadItem.getUriMatcher()) : null;
+                ? Pattern.compile(downloadItem.getUriMatcher()) : null;
 
         for (cur.moveToFirst(); !cur.isAfterLast(); cur.moveToNext()) {
             final String existingDownloadUri = cur.getString(idxUri);
@@ -511,53 +498,60 @@ public class BackgroundDownload extends CordovaPlugin {
         File sourceFile = new File(curDownload.getTempFileUri().getPath());
         File destFile = new File(curDownload.getTargetFileUri().getPath());
 
-        // try to perform rename operation first
-        boolean copyingSuccess = sourceFile.renameTo(destFile);
-        if (!copyingSuccess) {
-            try {
-                if (destFile.getParentFile().getUsableSpace() < sourceFile.length()) {
-                    curDownload.reportError(DownloadManager.ERROR_INSUFFICIENT_SPACE);
-                } else {
-                    copyFile(curDownload, sourceFile, destFile);
-                    copyingSuccess = true;
-                }
-            } catch (InterruptedIOException e) {
-                curDownload.reportError(ERROR_CANCELED);
-            } catch (Exception e) {
-                curDownload.reportError("Cannot copy from temporary path to actual path");
-                Log.e(TAG, String.format("Error occurred while copying the file. Source: '%s'(%s), dest: '%s'", curDownload.getTempFileUri(), sourceFile.exists(), curDownload.getTargetFileUri()), e);
+        boolean copyingSuccess = false;
+        try {
+            // try to perform rename operation first
+            copyingSuccess = sourceFile.renameTo(destFile);
+            if (copyingSuccess) {
+                curDownload.getCallbackContext().success();
+                return;
             }
-        }
 
-        if (copyingSuccess) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                StorageManager storageManager =
+                        cordova.getActivity().getApplicationContext().getSystemService(StorageManager.class);
+                UUID appSpecificInternalDirUuid = storageManager.getUuidForPath(destFile.getParentFile());
+                long availableBytes =
+                        storageManager.getAllocatableBytes(appSpecificInternalDirUuid);
+                if (availableBytes < sourceFile.length()) {
+                    curDownload.reportError(DownloadManager.ERROR_INSUFFICIENT_SPACE);
+                    return;
+                }
+
+                storageManager.allocateBytes(
+                        appSpecificInternalDirUuid, sourceFile.length());
+                copyFile(curDownload, sourceFile, destFile);
+                copyingSuccess = true;
+                return;
+            }
+
+            long usableSpace = Objects.requireNonNull(destFile.getParentFile()).getUsableSpace();
+            long length = sourceFile.length();
+            if (usableSpace < length) {
+                curDownload.reportError(DownloadManager.ERROR_INSUFFICIENT_SPACE);
+                return;
+            }
+            copyFile(curDownload, sourceFile, destFile);
+            copyingSuccess = true;
             curDownload.getCallbackContext().success();
+        } catch (InterruptedIOException e) {
+            curDownload.reportError(ERROR_CANCELED);
+        } catch (Exception e) {
+            curDownload.reportError("Cannot copy from temporary path to actual path");
+            Log.e(TAG, String.format("Error occurred while copying the file. Source: '%s'(%s), dest: '%s'", curDownload.getTempFileUri(), sourceFile.exists(), curDownload.getTargetFileUri()), e);
+        } finally {
+            cleanUp(curDownload, !copyingSuccess);
         }
-
-        cleanUp(curDownload, !copyingSuccess);
     }
 
     private void copyFile(Download curDownload, File fromFile, File toFile) throws IOException {
-        InputStream from = null;
-        OutputStream to = null;
-        try {
-            from = new FileInputStream(fromFile);
-            to = new FileOutputStream(toFile);
+        try (InputStream from = new FileInputStream(fromFile); OutputStream to = new FileOutputStream(toFile)) {
             byte[] buf = new byte[BUFFER_SIZE];
             int bytesRead;
             while ((bytesRead = from.read(buf)) > 0) {
                 to.write(buf, 0, bytesRead);
                 if (curDownload.isCanceled()) {
                     throw new InterruptedIOException("Copying terminated");
-                }
-            }
-        } finally {
-            if (from != null)
-                from.close();
-            if (to != null) {
-                try {
-                    to.close();
-                } catch (Exception ignore) {
-                    ignore.printStackTrace();
                 }
             }
         }
@@ -573,7 +567,7 @@ public class BackgroundDownload extends CordovaPlugin {
         return true;
     }
 
-    public void onRequestPermissionResult(int requestCode, String[] permissions, int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         final PermissionsRequest permissionsRequest = permissionRequests.get(requestCode);
         permissionRequests.remove(requestCode);
         if (permissionsRequest == null) {
@@ -589,21 +583,6 @@ public class BackgroundDownload extends CordovaPlugin {
             startAsync(permissionsRequest.rawArgs, permissionsRequest.callbackContext);
         } catch (JSONException ex) {
             permissionsRequest.callbackContext.error(ex.getMessage());
-        }
-    }
-
-    private void copyFile(File src, File dest) throws IOException {
-        FileChannel inChannel = new FileInputStream(src).getChannel();
-        FileChannel outChannel = new FileOutputStream(dest).getChannel();
-        try {
-            inChannel.transferTo(0, inChannel.size(), outChannel);
-        } finally {
-            if (inChannel != null) {
-                inChannel.close();
-            }
-            if (outChannel != null) {
-                outChannel.close();
-            }
         }
     }
 }

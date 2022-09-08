@@ -22,7 +22,7 @@
     "cordova-android",
     "cordova-ios",
   ],
-  "author": "Sergey Grebnov",
+  "author": "Maarten Manders",
   "license": "Apache 2.0",
   "bugs": {
     "url": "https://github.com/dualinventive/cordova-plugin-background-download/issues"
