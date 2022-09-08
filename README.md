@@ -64,7 +64,6 @@ Read File Plugin quirks for more details:
 
 **Supported platforms**
  
- * Windows
  * iOS 7.0 or later
  * Android
  

@@ -5,7 +5,6 @@
   "cordova": {
     "id": "cordova-plugin-background-download",
     "platforms": [
-      "windows",
       "ios",
       "android"
     ]
@@ -22,7 +21,6 @@
     "ecosystem:cordova",
     "cordova-android",
     "cordova-ios",
-    "cordova-windows"
   ],
   "author": "Sergey Grebnov",
   "license": "Apache 2.0",
