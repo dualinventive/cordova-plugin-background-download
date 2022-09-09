@@ -20,7 +20,7 @@
     "download",
     "ecosystem:cordova",
     "cordova-android",
-    "cordova-ios",
+    "cordova-ios"
   ],
   "author": "Maarten Manders",
   "license": "Apache 2.0",
